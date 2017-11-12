@@ -1,6 +1,5 @@
-var assign = require('object-assign');
 var repeat = require('repeat-string');
-var getPort = require('getport');
+var getPort = require('get-port');
 var getOptions = require('./lib/options');
 
 var LOG_LEVEL_NONE = 0;
@@ -10,33 +9,31 @@ var LOG_LEVEL_INFO = 3;
 
 module.exports = function(argv) {
   var SocketCluster = require('socketcluster').SocketCluster;
-  var options = assign(getOptions(argv), {
+  var options = Object.assign(getOptions(argv), {
     workerController: __dirname + '/lib/worker.js',
     allowClientPublish: false
   });
   var port = options.port;
   var logLevel = options.logLevel === undefined ? LOG_LEVEL_INFO : options.logLevel;
-  return new Promise(function(resolve) {
-    // Check port already used
-    getPort(port, function(err, p) {
-      if (err) {
-        if (logLevel >= LOG_LEVEL_ERROR) {
-          console.error(err);
-        }
-        return;
-      }
+
+  // Check if port already used
+  return getPort({ port: port })
+    .then(function(p) {
       if (port !== p) {
         if (logLevel >= LOG_LEVEL_WARN) {
           console.log('[RemoteDev] Server port ' + port + ' is already used.');
         }
-        resolve({ portAlreadyUsed: true, on: function(status, cb) { cb(); } });
-      } else {
-        if (logLevel >= LOG_LEVEL_INFO) {
-          console.log('[RemoteDev] Start server...');
-          console.log(repeat('-', 80) + '\n');
-        }
-        resolve(new SocketCluster(options));
+        return { portAlreadyUsed: true, on: function(status, cb) { cb(); } };
+      }
+      if (logLevel >= LOG_LEVEL_INFO) {
+        console.log('[RemoteDev] Start server...');
+        console.log(repeat('-', 80) + '\n');
+      }
+      return new SocketCluster(options);
+    })
+    .catch(function(error) {
+      if (logLevel >= LOG_LEVEL_ERROR) {
+        console.error(error);
       }
     });
-  });
 };
